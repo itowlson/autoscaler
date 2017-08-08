@@ -25,8 +25,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	apiv1 "k8s.io/api/core/v1"
 	"net/http"
+
+	apiv1 "k8s.io/api/core/v1"
 )
 
 // Mock for VirtualMachineScaleSetsClient
@@ -50,16 +51,26 @@ func (client *VirtualMachineScaleSetsClientMock) Get(resourceGroupName string,
 }
 
 func (client *VirtualMachineScaleSetsClientMock) CreateOrUpdate(
-	resourceGroupName string, name string, parameters compute.VirtualMachineScaleSet, cancel <-chan struct{}) (result autorest.Response, err error) {
-	fmt.Printf("Called VirtualMachineScaleSetsClientMock.CreateOrUpdate(%s,%s)\n", resourceGroupName, name)
-	return autorest.Response{}, nil
+	resourceGroupName string, name string, parameters compute.VirtualMachineScaleSet, cancel <-chan struct{}) (<-chan compute.VirtualMachineScaleSet, <-chan error) {
+
+	opch := make(chan compute.VirtualMachineScaleSet)
+	errch := make(chan error)
+	go func() {
+		fmt.Printf("Called VirtualMachineScaleSetsClientMock.CreateOrUpdate(%s,%s)\n", resourceGroupName, name)
+		opch <- compute.VirtualMachineScaleSet{}
+		close(opch)
+		close(errch)
+	}()
+	return opch, errch
 }
 
 func (client *VirtualMachineScaleSetsClientMock) DeleteInstances(resourceGroupName string, vmScaleSetName string,
-	vmInstanceIDs compute.VirtualMachineScaleSetVMInstanceRequiredIDs, cancel <-chan struct{}) (result autorest.Response, err error) {
+	vmInstanceIDs compute.VirtualMachineScaleSetVMInstanceRequiredIDs, cancel <-chan struct{}) (<-chan compute.OperationStatusResponse, <-chan error) {
 
 	args := client.Called(resourceGroupName, vmScaleSetName, vmInstanceIDs, cancel)
-	return args.Get(0).(autorest.Response), args.Error(1)
+	opch := args.Get(0).(chan compute.OperationStatusResponse)
+	errch := args.Get(1).(chan error)
+	return opch, errch
 }
 
 // Mock for VirtualMachineScaleSetVMsClient
@@ -288,12 +299,23 @@ func TestDeleteNodes(t *testing.T) {
 	//requiredIds := compute.VirtualMachineScaleSetVMInstanceRequiredIDs{
 	//	InstanceIds: &instanceIds,
 	//}
-	response := autorest.Response{
-		Response: &http.Response{
-			Status: "OK",
+	response := compute.OperationStatusResponse{
+		Response: autorest.Response{
+			Response: &http.Response{
+				Status: "OK",
+			},
 		},
 	}
-	scaleSetClient.On("DeleteInstances", mock.Anything, "test-asg", mock.Anything, mock.Anything).Return(response, nil)
+
+	opch := make(chan compute.OperationStatusResponse)
+	errch := make(chan error)
+
+	go func() {
+		opch <- response
+		errch <- nil
+	}()
+
+	scaleSetClient.On("DeleteInstances", mock.Anything, "test-asg", mock.Anything, mock.Anything).Return(opch, errch)
 
 	provider := testProvider(t, m)
 	err := provider.addNodeGroup("1:5:test-asg")

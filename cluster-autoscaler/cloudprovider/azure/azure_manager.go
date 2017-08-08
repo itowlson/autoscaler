@@ -27,12 +27,14 @@ import (
 
 	"bytes"
 	"fmt"
-	"github.com/Azure/go-autorest/autorest"
-	"github.com/Azure/go-autorest/autorest/azure"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/Azure/go-autorest/autorest"
+	"github.com/Azure/go-autorest/autorest/adal"
+	"github.com/Azure/go-autorest/autorest/azure"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 type scaleSetInformation struct {
@@ -42,8 +44,8 @@ type scaleSetInformation struct {
 
 type scaleSetClient interface {
 	Get(resourceGroupName string, vmScaleSetName string) (result compute.VirtualMachineScaleSet, err error)
-	CreateOrUpdate(resourceGroupName string, name string, parameters compute.VirtualMachineScaleSet, cancel <-chan struct{}) (result autorest.Response, err error)
-	DeleteInstances(resourceGroupName string, vmScaleSetName string, vmInstanceIDs compute.VirtualMachineScaleSetVMInstanceRequiredIDs, cancel <-chan struct{}) (result autorest.Response, err error)
+	CreateOrUpdate(resourceGroupName string, name string, parameters compute.VirtualMachineScaleSet, cancel <-chan struct{}) (<-chan compute.VirtualMachineScaleSet, <-chan error)
+	DeleteInstances(resourceGroupName string, vmScaleSetName string, vmInstanceIDs compute.VirtualMachineScaleSetVMInstanceRequiredIDs, cancel <-chan struct{}) (<-chan compute.OperationStatusResponse, <-chan error)
 }
 
 type scaleSetVMClient interface {
@@ -142,7 +144,7 @@ func CreateAzureManager(configReader io.Reader) (*AzureManager, error) {
 
 	scaleSetAPI = compute.NewVirtualMachineScaleSetsClient(subscriptionId)
 	scaleSetsClient := scaleSetAPI.(compute.VirtualMachineScaleSetsClient)
-	scaleSetsClient.Authorizer = spt
+	scaleSetsClient.Authorizer = autorest.NewBearerAuthorizer(spt)
 
 	scaleSetsClient.Sender = autorest.CreateSender(
 	//autorest.WithLogging(log.New(os.Stdout, "sdk-example: ", log.LstdFlags)),
@@ -155,7 +157,7 @@ func CreateAzureManager(configReader io.Reader) (*AzureManager, error) {
 
 	scaleSetVmAPI = compute.NewVirtualMachineScaleSetVMsClient(subscriptionId)
 	scaleSetVMsClient := scaleSetVmAPI.(compute.VirtualMachineScaleSetVMsClient)
-	scaleSetVMsClient.Authorizer = spt
+	scaleSetVMsClient.Authorizer = autorest.NewBearerAuthorizer(spt)
 	scaleSetVMsClient.RequestInspector = withInspection()
 	scaleSetVMsClient.ResponseInspector = byInspecting()
 
@@ -184,12 +186,12 @@ func CreateAzureManager(configReader io.Reader) (*AzureManager, error) {
 
 // NewServicePrincipalTokenFromCredentials creates a new ServicePrincipalToken using values of the
 // passed credentials map.
-func NewServicePrincipalTokenFromCredentials(tenantId string, clientId string, clientSecret string, scope string) (*azure.ServicePrincipalToken, error) {
-	oauthConfig, err := azure.PublicCloud.OAuthConfigForTenant(tenantId)
+func NewServicePrincipalTokenFromCredentials(tenantId string, clientId string, clientSecret string, scope string) (*adal.ServicePrincipalToken, error) {
+	oauthConfig, err := adal.NewOAuthConfig(azure.PublicCloud.ActiveDirectoryEndpoint, tenantId)
 	if err != nil {
 		panic(err)
 	}
-	return azure.NewServicePrincipalToken(*oauthConfig, clientId, clientSecret, scope)
+	return adal.NewServicePrincipalToken(*oauthConfig, clientId, clientSecret, scope)
 }
 
 func withInspection() autorest.PrepareDecorator {
@@ -243,12 +245,14 @@ func (m *AzureManager) SetScaleSetSize(asConfig *ScaleSet, size int64) error {
 	op.Sku.Capacity = &size
 	op.VirtualMachineScaleSetProperties.ProvisioningState = nil
 	cancel := make(chan struct{})
-	_, err = m.scaleSetClient.CreateOrUpdate(m.resourceGroupName, asConfig.Name, op, cancel)
+	opch, errch := m.scaleSetClient.CreateOrUpdate(m.resourceGroupName, asConfig.Name, op, cancel)
 
-	if err != nil {
+	select {
+	case err = <-errch:
 		return err
+	case op = <-opch:
+		return nil
 	}
-	return nil
 }
 
 // GetScaleSetForInstance returns ScaleSetConfig of the given Instance
@@ -305,14 +309,17 @@ func (m *AzureManager) DeleteInstances(instances []*AzureRef) error {
 		InstanceIds: &instanceIds,
 	}
 	cancel := make(chan struct{})
-	resp, err := m.scaleSetClient.DeleteInstances(m.resourceGroupName, commonAsg.Name, *requiredIds, cancel)
-	if err != nil {
+	respch, errch := m.scaleSetClient.DeleteInstances(m.resourceGroupName, commonAsg.Name, *requiredIds, cancel)
+
+	select {
+	case err = <-errch:
 		return err
+	case resp := <-respch:
+		if resp.Status != nil {
+			glog.V(4).Infof(*resp.Status)
+		}
+		return nil
 	}
-
-	glog.V(4).Infof(resp.Status)
-
-	return nil
 }
 
 func (m *AzureManager) regenerateCache() error {
