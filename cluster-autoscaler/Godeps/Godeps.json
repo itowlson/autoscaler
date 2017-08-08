@@ -18,33 +18,38 @@
 		},
 		{
 			"ImportPath": "github.com/Azure/azure-sdk-for-go/arm/compute",
-			"Comment": "8.0.1-beta",
-			"Rev": "8e625d1702a32d01cef05a9252198d231c4af113"
+			"Comment": "v10.2.1-beta",
+			"Rev": "2d49bb8f2cee530cc16f1f1a9f0aae763dee257d"
 		},
 		{
 			"ImportPath": "github.com/Azure/go-autorest/autorest",
-			"Comment": "v7.2.3",
-			"Rev": "d7c034a8af24eda120dd6460bfcd6d9ed14e43ca"
+			"Comment": "v8.1.1",
+			"Rev": "f6e08fe5e4d45c9a66e40196d3fed5f37331d224"
+		},
+		{
+			"ImportPath": "github.com/Azure/go-autorest/autorest/adal",
+			"Comment": "v8.1.1",
+			"Rev": "f6e08fe5e4d45c9a66e40196d3fed5f37331d224"
 		},
 		{
 			"ImportPath": "github.com/Azure/go-autorest/autorest/azure",
-			"Comment": "v7.2.3",
-			"Rev": "d7c034a8af24eda120dd6460bfcd6d9ed14e43ca"
+			"Comment": "v8.1.1",
+			"Rev": "f6e08fe5e4d45c9a66e40196d3fed5f37331d224"
 		},
 		{
 			"ImportPath": "github.com/Azure/go-autorest/autorest/date",
-			"Comment": "v7.2.3",
-			"Rev": "d7c034a8af24eda120dd6460bfcd6d9ed14e43ca"
+			"Comment": "v8.1.1",
+			"Rev": "f6e08fe5e4d45c9a66e40196d3fed5f37331d224"
 		},
 		{
 			"ImportPath": "github.com/Azure/go-autorest/autorest/to",
-			"Comment": "v7.2.3",
-			"Rev": "d7c034a8af24eda120dd6460bfcd6d9ed14e43ca"
+			"Comment": "v8.1.1",
+			"Rev": "f6e08fe5e4d45c9a66e40196d3fed5f37331d224"
 		},
 		{
 			"ImportPath": "github.com/Azure/go-autorest/autorest/validation",
-			"Comment": "v7.2.3",
-			"Rev": "d7c034a8af24eda120dd6460bfcd6d9ed14e43ca"
+			"Comment": "v8.1.1",
+			"Rev": "f6e08fe5e4d45c9a66e40196d3fed5f37331d224"
 		},
 		{
 			"ImportPath": "github.com/PuerkitoBio/purell",
